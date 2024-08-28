@@ -204,7 +204,7 @@ C Apply Boundary conditions to velocity field
 
 ! Compute the Reynolds stress and mean velocity gradient
 ! Here, uv and wv are defined on the GY grid
-! uv is defined on the GYF grid
+! uw is defined on the GYF grid
       do j=1,NY
         uv(j)=0. 
         uw(j)=0.
@@ -237,7 +237,53 @@ C Apply Boundary conditions to velocity field
         uw(j)=uw(j)/(float(NZ)*float(NX))
         wv(j)=wv(j)/(float(NZ)*float(NX))
       end do
-              
+! Compute K2D ( <u>z - <u>xz ) and K3D (u - <u>z )
+
+! 1)Compute <u>z first (spanwise direction)
+      do j=1,NY
+      do i=0,NXM
+         ume_z(i,j)=0.
+         vme_z(i,j)=0.
+         wme_z(i,j)=0.
+      do k=0,NZP-1
+         ume_z(i,j)=ume_z(i,j)+U1(i,k,j)
+         vme_z(i,j)=vme_z(i,j)+U2(i,k,j)
+         wme_z(i,j)=wme_z(i,j)+U3(i,k,j)
+      end do
+        ume_z(i,j)=ume_z(i,j)/float(NZ)
+        vme_z(i,j)=vme_z(i,j)/float(NZ)
+        wme_z(i,j)=wme_z(i,j)/float(NZ)
+      end do 
+      end do
+
+! 2)Compute k2d and k3d
+      do j=1,NY
+        ke2(j)=0.d0
+      do i=0,NXM
+        ke2(j)=ke2(j)+(ume_z(i,j)-ume(j))**2.+
+     &  (0.5*( (vme_z(i,j)-vme(j))+(vme_z(i,j+1)-vme(j+1)) ) )**2.+
+     &  (wme_z(i,j)-wme(j))**2.
+      end do
+        ke2(j)=ke2(j)/(float(NX))
+      end do
+     
+      do j=1,NY
+        ke3(j)=0.d0
+      do k=0,NZP-1
+      do i=0,NXM
+        ke3(j)=ke3(j)+(U1(i,k,j)-ume_z(i,j))**2.+
+     &  (U2(i,k,j)-vme_z(i,j))**2.+(U3(i,k,j)-wme_z(i,j))**2.
+      end do
+      end do
+        ke3(j)=ke3(j)/(float(NZ)*float(NX))
+      end do
+
+      call mpi_allreduce(mpi_in_place,ke2,NY+2,MPI_DOUBLE_PRECISION,
+     &     MPI_SUM,MPI_COMM_Z,ierror)
+      call mpi_allreduce(mpi_in_place,ke3,NY+2,MPI_DOUBLE_PRECISION,
+     &     MPI_SUM,MPI_COMM_Z,ierror)
+
+             
 ! Get the y-derivative of the mean velocity at GY points
       do j=1,NY
         dudy(j)=(ume(j)-ume(j-1))/(GYF(j)-GYF(j-1))
@@ -320,7 +366,7 @@ C Apply Boundary conditions to velocity field
       omega_y(j)=sqrt(omega_y(j)/(dble(NX)*dble(NZ)))
       end do
 
-! Now, get the y-component in fourier space
+! Now, get the z-component in fourier space
       do j=1,NY
       do k=0,TNKZ
       do i=0,NXP-1 ! NKX
@@ -402,6 +448,14 @@ C Apply Boundary conditions to velocity field
       Diag=dwdy(1:NY)
       call WriteStatH5(FNAME,gname,Diag)
 
+      gname='ke2'
+      Diag=ke2(1:NY)
+      call WriteStatH5(FNAME,gname,Diag)
+
+      gname='ke3'
+      Diag=ke3(1:NY)
+      call WriteStatH5(FNAME,gname,Diag)
+
       gname='cp'
       Diag=dble(cp(0,0,1:NY))
       call WriteStatH5(FNAME,gname,Diag)
@@ -419,7 +473,7 @@ C Apply Boundary conditions to velocity field
       call WriteStatH5(FNAME,gname,Diag)
 
       gname='omega_z'
-      Diag=omega_y(1:NY)
+      Diag=omega_z(1:NY)
       call WriteStatH5(FNAME,gname,Diag)
 
       END IF
@@ -439,7 +493,7 @@ C Apply Boundary conditions to velocity field
       do j=1,NY
         write(40,401) j,GYF(J),ume(j)
      +      ,0.5*(vme(j+1)+vme(j))
-     +      ,wme(j),urms(j),vrms(j),wrms(j)
+     +      ,wme(j),urms(j),vrms(j),wrms(j),ke2(j),ke3(j)
      +      ,uv(j),uw(j),wv(j),dudy(j),dwdy(j),dble(cp(0,0,j)),shear(j)
      &      ,omega_x(j),omega_y(j),omega_z(j)
       end do
@@ -612,6 +666,13 @@ C Apply Boundary conditions to velocity field
 
       END IF
 #endif
+
+! While buoyancy is in physical space, calculate its pdf (call separate
+! subroutine
+      if (BINNING) then
+         call BUOYANCY_PDF_CHAN()
+      end if
+!      write(*,*) 'RANK, RANKY, RANKZ',RANK,RANKY,RANKZ
 
 ! Convert back to Fourier space
       S1(:,:,:)=TH(:,:,:,N)

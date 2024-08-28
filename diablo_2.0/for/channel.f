@@ -17,7 +17,7 @@ C Initialize any constants here
 ! Defined starting and ending indeces in the wall-bounded direction
 ! These will be used for loops in the GYF variables
 ! The start and end of these loops depends on the bounary conditions
-! For example, Direchlet BCs do not need to update the wall values
+! For example, Dirichlet BCs do not need to update the wall values
 
         IF (U_BC_YMIN.EQ.0) THEN
           JSTART=2
@@ -69,16 +69,21 @@ C OUTPUTS (in Fourier space):  CUi, CP, and (if k<3) CFi at (k)
 C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
       INCLUDE 'header'
 
-      INTEGER I,J,K,N,ISTART
+      INTEGER I,J,K,N,ISTART      
       REAL*8 TEMP1, TEMP2, TEMP3, TEMP4, TEMP5, UBULK
 
 C Define the constants that are used in the time-stepping
 C For reference, see Numerical Renaissance
-      TEMP1=NU * H_BAR(RK_STEP) / 2.d0
-      TEMP2=H_BAR(RK_STEP) / 2.d0
+      TEMP1=NU * H_BAR(RK_STEP) / 2.0
+      TEMP2=H_BAR(RK_STEP) / 2.0
       TEMP3=ZETA_BAR(RK_STEP) * H_BAR(RK_STEP)
       TEMP4=H_BAR(RK_STEP)
       TEMP5=BETA_BAR(RK_STEP) * H_BAR(RK_STEP)
+
+! temporary - try calling sponge layer at start of RK step
+      IF (SPONGE.EQ.1) THEN
+         CALL SPONGE_VEL
+      END IF
 
 C First, we will compute the explicit RHS terms and store in Ri
 C Note, Momentum equation and hence the RHS is evaluated at the
@@ -93,7 +98,7 @@ C Store the old velocity in the RHS vector
           END DO
         END DO
       END DO
-      DO J=2,NY
+      DO J=2,NY 
         DO K=0,TNKZ
           DO I=0,NXP-1
             CR2(I,K,J)=CU2(I,K,J)
@@ -101,7 +106,7 @@ C Store the old velocity in the RHS vector
         END DO
       END DO
 
-C Add the R-K term from the rk-1 step
+C Add the R-K term from the rk-1 step 
       IF (RK_STEP .GT. 1) THEN
         DO J=JSTART,JEND
           DO K=0,TNKZ
@@ -119,7 +124,7 @@ C Add the R-K term from the rk-1 step
           END DO
         END DO
       END IF
-
+          
 C Take the y-derivative of the pressure at GY points in Fourier space
       DO J=2,NY
         DO K=0,TNKZ
@@ -152,7 +157,7 @@ C There are two built-in ways of doing this
 C F_TYPE=1 -> Constant pressure gradient in the x-direction
 C F_TYPE=2 -> Oscillatory pressure gradient in the x-direction
 C OTHER VALUES -> No forcing added
-      IF (F_TYPE.EQ.1) THEN
+      IF (F_TYPE.EQ.1) THEN 
 C Add forcing for a constant pressure gradient
         DO J=JSTART,JEND
           IF (RANKZ.eq.0) CR1(0,0,J)=CR1(0,0,J)-TEMP4*PX0
@@ -175,20 +180,20 @@ C or   BETA=2, etc. for hyper viscosity/diffusivity
       DO J=JSTART,JEND
         DO K=0,TNKZ
           DO I=0,NXP-1
-            CF1(I,K,J)=-NU * (KX2(I)+KZ2(K))**BETA * CU1(I,K,J)
-            CF3(I,K,J)=-NU * (KX2(I)+KZ2(K))**BETA * CU3(I,K,J)
+            CF1(I,K,J)=-NU * (KX2(I)+KZ2(K))**BETA * CU1(I,K,J) 
+            CF3(I,K,J)=-NU * (KX2(I)+KZ2(K))**BETA * CU3(I,K,J) 
           END DO
         END DO
       END DO
       DO J=2,NY
         DO K=0,TNKZ
           DO I=0,NXP-1
-            CF2(I,K,J)=-NU * (KX2(I)+KZ2(K))**BETA * CU2(I,K,J)
-          END DO
+            CF2(I,K,J)=-NU * (KX2(I)+KZ2(K))**BETA * CU2(I,K,J) 
+          END DO 
         END DO
       END DO
 
-! Add the terms owing to the system rotation (Coriolis terms)
+! Add the terms owing to the system rotation (Coriolis terms) 
 ! Assume that the flow is on an f-plane
       DO K=0,TNKZ
         DO I=0,NXP-1
@@ -199,13 +204,21 @@ C or   BETA=2, etc. for hyper viscosity/diffusivity
         END DO
       END DO
 
+      ! Add in the sponge layer at the boundaries
+      IF (SPONGE.EQ.1) THEN
+        ! CALL SPONGE_VEL
+         DO N=1,N_TH
+            CALL SPONGE_TH(N)
+         END DO
+      END IF
+
 ! Do for each scalar
       DO N=1,N_TH
 
-! If a scalar contributes to the denisty, RI is not equal to zero and
-! add the buoyancy term as explicit R-K.  Don't add the 0,0 mode in the
+! If a scalar contributes to the density, RI is not equal to zero and
+! add the buoyancy term as explicit R-K.  Don't add the 0,0 mode in the 
 ! y-direction, which corresponds to the plane-average.
-! The plane averaged density balances the hydrostatic pressure
+! The plane averaged density balances the hydrostatic pressure 
       DO J=2,NY
         DO K=1,TNKZ
           DO I=0,NXP-1
@@ -294,7 +307,7 @@ C End do number of passive scalars (N_TH)
 
 C Optionally, add user forcing to the right hand side
 C Here, we have U1, U2, U3, and TH in Fourier space
-      CALL USER_RHS_CHAN_FOURIER
+!      CALL USER_RHS_CHAN_FOURIER
 
 C If we are considering an LES, then add the subgrid scale stress:
 C Here, velocity and CFi should be in Fourier space
@@ -305,10 +318,6 @@ C If we have created new flow with random perturbations, wait for a
 C spinup before applying the subgrid model for stability purposes
 C In the process, Ui is converted to physical space
           call les_chan
-
-C Re-apply the boundary conditions for velocity
-C In the case of Neumann (applied stress) BCs, these were changed in the LES
-          call APPLY_BC_VEL_PHYS_MPI
 
 C APPLY constant SGS Prandlt number
          DO N=1,N_TH
@@ -345,7 +354,7 @@ C This is already done for the viscous terms inside les_chan.f
          DO J=JSTART_TH(N),JEND_TH(N)
            DO K=0,TNKZ
              DO I=0,NXP-1
-              CFTH(I,K,J,N)=CFTH(I,K,J,N)+CIKX(I)*CS1(I,K,J)
+              CFTH(I,K,J,N)=CFTH(I,K,J,N)+CIKX(I)*CS1(I,K,J) 
              END DO
            END DO
          END DO
@@ -374,7 +383,7 @@ C This is already done for the viscous terms inside les_chan.f
            END DO
          END DO
         END DO ! end do n
-
+ 
 
 ! Now, convert TH to physical space for calculation of nonlinear terms
         DO N=1,N_TH
@@ -383,8 +392,8 @@ C This is already done for the viscous terms inside les_chan.f
           TH(:,:,:,N)=S1(:,:,:)
         END DO
 
-      ELSE
-C If the subgrid model hasn't been called, then it is necessary to
+      ELSE 
+C If the subgrid model hasn't been called, then it is necessary to 
 C convert to physical space.
         CALL FFT_XZ_TO_PHYSICAL(CU1,U1,0,NY+1)
         CALL FFT_XZ_TO_PHYSICAL(CU2,U2,0,NY+1)
@@ -396,7 +405,7 @@ C convert to physical space.
           CS1(:,:,:)=CTH(:,:,:,N)
           CALL FFT_XZ_TO_PHYSICAL(CS1,S1,0,NY+1)
           TH(:,:,:,N)=S1(:,:,:)
-        END DO
+        END DO      
 
       END IF
 
@@ -404,7 +413,7 @@ C convert to physical space.
 C Compute the nonlinear products in physical space, then transform
 C back to Fourier space to compute the derivative.
 C Here, we compute the horizontal derivatives of the nonlinear terms
-C which will be treated with RKW3.
+C which will be treated with RKW3.  
 C Do terms one at a time to save on memory
 C U1*U3
       DO J=JSTART,JEND
@@ -414,14 +423,14 @@ C U1*U3
           END DO
         END DO
       END DO
-
+      
       CALL FFT_XZ_TO_FOURIER(S1,CS1,0,NY+1)
-
+      
       DO J=JSTART,JEND
         DO K=0,TNKZ
           DO I=0,NXP-1
-            CF1(I,K,J)=CF1(I,K,J) - CIKZ(K) * CS1(I,K,J)
-            CF3(I,K,J)=CF3(I,K,J) - CIKX(I) * CS1(I,K,J)
+            CF1(I,K,J)=CF1(I,K,J) - CIKZ(K) * CS1(I,K,J) 
+            CF3(I,K,J)=CF3(I,K,J) - CIKX(I) * CS1(I,K,J) 
           END DO
         END DO
       END DO
@@ -434,13 +443,13 @@ C U1*U1
           END DO
         END DO
       END DO
-
+      
       CALL FFT_XZ_TO_FOURIER(S1,CS1,0,NY+1)
-
+      
       DO J=JSTART,JEND
         DO K=0,TNKZ
           DO I=0,NXP-1
-            CF1(I,K,J)=CF1(I,K,J) - CIKX(I) * CS1(I,K,J)
+            CF1(I,K,J)=CF1(I,K,J) - CIKX(I) * CS1(I,K,J) 
           END DO
         END DO
       END DO
@@ -453,13 +462,13 @@ C U3*U3
           END DO
         END DO
       END DO
-
+      
       CALL FFT_XZ_TO_FOURIER(S1,CS1,0,NY+1)
-
+      
       DO J=JSTART,JEND
         DO K=0,TNKZ
           DO I=0,NXP-1
-            CF3(I,K,J)=CF3(I,K,J) - CIKZ(K) * CS1(I,K,J)
+            CF3(I,K,J)=CF3(I,K,J) - CIKZ(K) * CS1(I,K,J) 
           END DO
         END DO
       END DO
@@ -470,18 +479,18 @@ C U1*U2
         DO K=0,NZP-1
           DO I=0,NXM
             S1(I,K,J)=((DYF(J)*U1(I,K,J)
-     &                +DYF(J-1)*U1(I,K,J-1))/(2.*DY(J)))
+     &                +DYF(J-1)*U1(I,K,J-1))/(2.*DY(J))) 
      &                *U2(I,K,J)
           END DO
         END DO
       END DO
-
+      
       CALL FFT_XZ_TO_FOURIER(S1,CS1,0,NY+1)
-
+      
       DO J=2,NY
         DO K=0,TNKZ
           DO I=0,NXP-1
-            CF2(I,K,J)=CF2(I,K,J) - CIKX(I) * CS1(I,K,J)
+            CF2(I,K,J)=CF2(I,K,J) - CIKX(I) * CS1(I,K,J) 
           END DO
         END DO
       END DO
@@ -491,14 +500,14 @@ C U3*U2
         DO K=0,NZP-1
           DO I=0,NXM
             S1(I,K,J)=((DYF(J)*U3(I,K,J)
-     &                +DYF(J-1)*U3(I,K,J-1))/(2.*DY(J)))
+     &                +DYF(J-1)*U3(I,K,J-1))/(2.*DY(J))) 
      &                *U2(I,K,J)
           END DO
         END DO
       END DO
-
+      
       CALL FFT_XZ_TO_FOURIER(S1,CS1,0,NY+1)
-
+      
       DO J=2,NY
         DO K=0,TNKZ
           DO I=0,NXP-1
@@ -523,7 +532,7 @@ C U3*U2
       DO J=JSTART,JEND
         DO K=0,TNKZ
           DO I=0,NXP-1
-            CF1(I,K,J)=CF1(I,K,J) - CS1(I,K,J)
+            CF1(I,K,J)=CF1(I,K,J) - CS1(I,K,J) 
          END DO
         END DO
       END DO
@@ -544,7 +553,7 @@ C U3*U2
       DO J=JSTART,JEND
         DO K=0,TNKZ
           DO I=0,NXP-1
-            CF3(I,K,J)=CF3(I,K,J) - CS1(I,K,J)
+            CF3(I,K,J)=CF3(I,K,J) - CS1(I,K,J) 
           END DO
         END DO
       END DO
@@ -575,7 +584,7 @@ C -- At this point, we are done computing the nonlinear terms --
 
 C Optionally, add user forcing to the right hand side
 C Here, we have U1, U2, U3, and TH in physical space
-      CALL USER_RHS_CHAN_PHYSICAL
+!      CALL USER_RHS_CHAN_PHYSICAL
 
 C Finally, Add CFi to CRi
       DO J=JSTART,JEND
@@ -595,9 +604,9 @@ C Finally, Add CFi to CRi
       END DO
 
 C Convert RHS terms to physical space
-      CALL FFT_XZ_TO_PHYSICAL(CR1,R1,0,NY+1)
-      CALL FFT_XZ_TO_PHYSICAL(CR2,R2,2,NY)
-      CALL FFT_XZ_TO_PHYSICAL(CR3,R3,0,NY+1)
+      CALL FFT_XZ_TO_PHYSICAL(CR1,R1,0,NY+1)                 
+      CALL FFT_XZ_TO_PHYSICAL(CR2,R2,2,NY)                 
+      CALL FFT_XZ_TO_PHYSICAL(CR3,R3,0,NY+1)                 
 
 C Compute the vertical viscous term in physical space and add to RHS
 C This is the explicit part of the Crank-Nicolson term
@@ -607,26 +616,26 @@ C to horizontal viscosity and can be used to add anisotropic viscosity
         DO K=0,NZP-1
           DO I=0,NXM
             R1(I,K,J)=R1(I,K,J)+TEMP1*NU_V_SCALE*
-     &        (  ((U1(I,K,J+1) - U1(I,K,J)) / DY(J+1)
+     &        (  ((U1(I,K,J+1) - U1(I,K,J)) / DY(J+1)  
      &           -(U1(I,K,J)   - U1(I,K,J-1)) / DY(J)) /DYF(J)  )
             R3(I,K,J)=R3(I,K,J)+TEMP1*NU_V_SCALE*
-     &        (  ((U3(I,K,J+1) - U3(I,K,J)) / DY(J+1)
+     &        (  ((U3(I,K,J+1) - U3(I,K,J)) / DY(J+1) 
      &           -(U3(I,K,J)   - U3(I,K,J-1)) / DY(J)) /DYF(J)  )
           END DO
         END DO
       END DO
-      DO J=2,NY
+      DO J=2,NY 
         DO K=0,NZP-1
           DO I=0,NXM
             R2(I,K,J)=R2(I,K,J)+TEMP1*NU_V_SCALE*
-     &        (  ((U2(I,K,J+1) - U2(I,K,J))  / DYF(J)
+     &        (  ((U2(I,K,J+1) - U2(I,K,J))  / DYF(J) 
      &           -(U2(I,K,J)   - U2(I,K,J-1))/ DYF(J-1))/DY(J)  )
           END DO
         END DO
       END DO
 
 C If we are using a subgrid model, add the eddy viscosity term
-C This is an added viscosity that will be treated just like the
+C This is an added viscosity that will be treated just like the 
 C molecular viscosity with Crank-Nicolson for the vertical derivatives
       IF (LES) then
 C Note, NU_T is defined at GY points
@@ -634,23 +643,23 @@ C Note, NU_T is defined at GY points
         DO K=0,NZP-1
           DO I=0,NXM
             R1(I,K,J)=R1(I,K,J)+TEMP2*
-     &        (  (NU_T(I,K,J+1) * (U1(I,K,J+1) - U1(I,K,J)) / DY(J+1)
+     &        (  (NU_T(I,K,J+1) * (U1(I,K,J+1) - U1(I,K,J)) / DY(J+1)  
      &         -  NU_T(I,K,J) * (U1(I,K,J)   - U1(I,K,J-1)) / DY(J))
      &               /DYF(J)  )
             R3(I,K,J)=R3(I,K,J)+TEMP2*
-     &        (  (NU_T(I,K,J+1) * (U3(I,K,J+1) - U3(I,K,J)) / DY(J+1)
-     &        - NU_T(I,K,J) * (U3(I,K,J)   - U3(I,K,J-1)) / DY(J))
+     &        (  (NU_T(I,K,J+1) * (U3(I,K,J+1) - U3(I,K,J)) / DY(J+1) 
+     &        - NU_T(I,K,J) * (U3(I,K,J)   - U3(I,K,J-1)) / DY(J)) 
      &              /DYF(J)  )
           END DO
         END DO
       END DO
 ! Here, interpolate NU_T to GYF points
-      DO J=2,NY
+      DO J=2,NY 
         DO K=0,NZP-1
           DO I=0,NXM
             R2(I,K,J)=R2(I,K,J)+TEMP2*
      &     ((0.5d0*(NU_T(I,K,J)+NU_T(I,K,J+1))*(U2(I,K,J+1)-U2(I,K,J))
-     &                                              / DYF(J)
+     &                                              / DYF(J) 
      &    -0.5d0*(NU_T(I,K,J)+NU_T(I,K,J-1))*(U2(I,K,J)-U2(I,K,J-1))
      &                                          / DYF(J-1))   /DY(J)  )
           END DO
@@ -682,7 +691,7 @@ C Now, build the explicit RHS terms for the passive scalar(s)
           END DO
         END DO
       END DO
-! U3*TH
+! U3*TH 
       DO J=JSTART_TH(N),JEND_TH(N)
         DO K=0,NZP-1
           DO I=0,NXM
@@ -756,14 +765,14 @@ C Now, build the explicit RHS terms for the passive scalar(s)
      &     -KAPPA_T(I,K,J,N)*(TH(I,K,J,N)-TH(I,K,J-1,N))/DY(J))/DYF(J))
           END DO
         END DO
-      END DO
+      END DO  
       END IF
 
 C -- Now, timestep the passive scalar equation --
 C      We solve the the passive scalar before the velocity so that
 C      it is advected with the velocity from the previous R-K step
-C      which we have already made divergence free
-
+C      which we have already made divergence free 
+ 
 ! Solve the implicit equation for THETA
 ! Note that the system size is NY+1, but only 1..NY are used
 
@@ -775,8 +784,8 @@ C      which we have already made divergence free
           MATU(I,J)=0.
           VEC(I,J)=0.
         END DO
-      END DO
-
+      END DO 
+    
 ! Build implicit matrix
 ! Use quasi-second order interpolation for TH on GY points
       DO K=0,NZP-1
@@ -793,8 +802,8 @@ C      which we have already made divergence free
 ! IF using a subgrid model (LES) then add the eddy diffusivity part implicitly
         IF (LES) THEN
         DO J=JSTART_TH(N),JEND_TH(N)
-          DO I=0,NXM
-            MATL(I,J) = MATL(I,J) - TEMP2 * KAPPA_T(I,K,J,N)
+          DO I=0,NXM   
+            MATL(I,J) = MATL(I,J) - TEMP2 * KAPPA_T(I,K,J,N) 
      &                                 / (DY(J)*DYF(J))
             MATD(I,J) = MATD(I,J)+ TEMP2 * KAPPA_T(I,K,J+1,N)
      &                                 / (DY(J+1)*DYF(J))
@@ -830,11 +839,11 @@ C      which we have already made divergence free
         END DO
 
 ! END do k
-      END DO
+      END DO 
 
 ! End do number of passive scalars
         END DO
-
+        
 C Initialize the matrix to zeros to be used for implicit solves
 C Note that the system size is NY+1, but only 1..NY are used
 
@@ -846,29 +855,29 @@ C Note that the system size is NY+1, but only 1..NY are used
           MATU(I,J)=0.
           VEC(I,J)=0.
         END DO
-      END DO
+      END DO 
 
 C Build implicit matrix for U2
       DO K=0,NZP-1
         DO J=2,NY
           DO I=0,NXM
             MATL(I,J)= -TEMP1*NU_V_SCALE/(DYF(J-1)*DY(J))
-            MATD(I,J)=1.+TEMP1*NU_V_SCALE/(DYF(J)*DY(J))
-     &                 + TEMP1*NU_V_SCALE/(DYF(J-1)*DY(J))
+            MATD(I,J)=1.+TEMP1*NU_V_SCALE/(DYF(J)*DY(J)) 
+     &                 + TEMP1*NU_V_SCALE/(DYF(J-1)*DY(J)) 
             MATU(I,J)= -TEMP1*NU_V_SCALE/(DYF(J)*DY(J))
             VEC(I,J)=R2(I,K,J)
-          END DO
+          END DO 
         END DO
         IF (LES) THEN
 ! IF using a subgrid model (LES) then add the eddy viscosity part implicitly
         DO J=2,NY
           DO I=0,NXM
-            MATL(I,J) = MATL(I,J)
+            MATL(I,J) = MATL(I,J) 
      &      - TEMP2 * 0.5d0*(NU_T(I,K,J)+NU_T(I,K,J-1))/(DYF(J-1)*DY(J))
-            MATD(I,J) = MATD(I,J)
+            MATD(I,J) = MATD(I,J) 
      &      + TEMP2 * 0.5d0*(NU_T(I,K,J)+NU_T(I,K,J+1))/(DYF(J)*DY(J))
      &      + TEMP2 * 0.5d0*(NU_T(I,K,J)+NU_T(I,K,J-1))/(DYF(J-1)*DY(J))
-            MATU(I,J) = MATU(I,J)
+            MATU(I,J) = MATU(I,J) 
      &      - TEMP2 * 0.5d0*(NU_T(I,K,J)+NU_T(I,K,J+1))/(DYF(J)*DY(J))
           END DO
         END DO
@@ -898,7 +907,7 @@ C Now, solve the tridiagonal system for U2(i,:,k)
           END DO
         END DO
 ! End do k
-      END DO
+      END DO 
 
 C Solve for U1
 C Note, here the matrix will be indexed from 1...NY+1 corresponding to U1(0:NY)
@@ -911,15 +920,15 @@ C Note, here the matrix will be indexed from 1...NY+1 corresponding to U1(0:NY)
           MATU(I,J)=0.
           VEC(I,J)=0.
         END DO
-      END DO
+      END DO 
 
-C Build the implicit system of equations for U1
+C Build the implicit system of equations for U1 
       DO K=0,NZP-1
         DO J=JSTART,JEND
           DO I=0,NXM
             MATL(I,J)=-TEMP1*NU_V_SCALE/(DY(J)*DYF(J))
             MATD(I,J)=1.-TEMP1*NU_V_SCALE*(-1./(DY(J+1)*DYF(J))
-     &         -1./(DY(J)*DYF(J)))
+     &         -1./(DY(J)*DYF(J))) 
             MATU(I,J)=-TEMP1*NU_V_SCALE/(DY(J+1)*DYF(J))
             VEC(I,J)=R1(I,K,J)
           END DO
@@ -928,7 +937,7 @@ C Build the implicit system of equations for U1
         IF (LES) THEN
         DO J=JSTART,JEND
           DO I=0,NXM
-            MATL(I,J) = MATL(I,J) - TEMP2 * NU_T(I,K,J)
+            MATL(I,J) = MATL(I,J) - TEMP2 * NU_T(I,K,J) 
      &                               / (DY(J)*DYF(J))
             MATD(I,J) = MATD(I,J) + TEMP2 * NU_T(I,K,J+1)
      &                              / (DY(J+1)*DYF(J))
@@ -973,7 +982,7 @@ C Now, solve the tridiagonal system for U1(:,k,:)
           MATU(I,J)=0.
           VEC(I,J)=0.
         END DO
-      END DO
+      END DO 
 
 C Solve for U3
 C Note, here the matrix will be indexed from 1...NY+1 corresponding to U1(0:NY)
@@ -1039,7 +1048,7 @@ C the current timestep
         CALL COURANT
       END IF
 
-! Transform TH and U to Fourier Space
+! Transform TH and U to Fourier Space 
       CALL FFT_XZ_TO_FOURIER(U1,CU1,0,NY+1)
       CALL FFT_XZ_TO_FOURIER(U2,CU2,0,NY+1)
       CALL FFT_XZ_TO_FOURIER(U3,CU3,0,NY+1)
@@ -1064,7 +1073,7 @@ C Note, here we divide by H_BAR since it was absorbed into PHI in REM_DIV
         END DO
       END DO
 
-      ! Fix disparities at the boundary due to the thoms algorithm in parallel
+      ! Fix disparities at the boundary due to the thomas algorithm in parallel
       IF (USE_MPI) THEN
          CALL GHOST_CHAN_MPI
       END IF
@@ -1076,23 +1085,23 @@ C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
       SUBROUTINE RK_CHAN_2
 C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 C Alternative time-stepping algorithm for the channel-flow case.
-C This algorithm uses Crank-Nicolson for all viscous terms and
+C This algorithm uses Crank-Nicolson for all viscous terms and 
 C third order Runge-Kutta for all nonlinear terms
 C INPUTS  (in Fourier space):  CUi, P, and (if k>1) CFi at (k-1)  (for i=1,2,3)
 C OUTPUTS (in Fourier space):  CUi, P, and (if k<3) CFi at (k)
-C Each RK step, there are 11 FFT calls. 11 storage variables are used.
+C Each RK step, there are 11 FFT calls. 11 storage variables are used.     
 C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 
       INCLUDE 'header'
 
-      INTEGER I,J,K,N
+      INTEGER I,J,K,N      
       REAL*8 TEMP1, TEMP2, TEMP3, TEMP4, TEMP5, UBULK
 
       ! STOP -----------------------------------
-      IF (RANK.EQ.0)
+      IF (RANK.EQ.0) 
      &     write(*,*) ' RK_CHAN_2 not supported yet '
       call mpi_finalize(ierror)
-      stop
+      stop 
       ! ----------------------------------------
 
 
@@ -1102,14 +1111,14 @@ C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
       SUBROUTINE REM_DIV_CHAN
 C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
-
+      
 C Compute varphi, store in variable CR1.
 C Solves for phi in computational space
 C H_BAR has been absorbed into PHI, so we are solving for H_BAR*PHI
 
       INCLUDE 'header'
       INTEGER I,J,K
-
+ 
 C First, Initialize the matrix components
       DO J=0,NY+1
         DO I=0,NXP-1
@@ -1134,10 +1143,10 @@ C First, construct the system to be solved
         END DO
 
 C Now, create the RHS vector
-        DO J=1,NY
+        DO J=1,NY         
           DO I=0,NXP-1
-            VEC_C(I,J)=(CIKX(I)*CU1(I,K,J)
-     &            + (CU2(I,K,J+1)-CU2(I,K,J))/DYF(J)
+            VEC_C(I,J)=(CIKX(I)*CU1(I,K,J) 
+     &            + (CU2(I,K,J+1)-CU2(I,K,J))/DYF(J) 
      &            + CIKZ(K)*CU3(I,K,J))
           END DO
         END DO
@@ -1157,7 +1166,7 @@ C Else we are running in serial mode
           IF ((K.EQ.0).AND.(I.EQ.0)) THEN
 C Use homogeneous dirichlet BCS for kx=kz=0 component at bottom wall
 C Otherwise the matrix will be singular
-            MATL_C(I,1)=0.
+            MATL_C(I,1)=0. 
             MATD_C(I,1)=1.
             MATU_C(I,1)=0.
             VEC_C(I,1)=(0.,0.)
@@ -1197,7 +1206,7 @@ C Now, Solve for CUi, the divergenceless velocity field
         DO K=0,TNKZ
           DO I=0,NXP-1
             CU1(I,K,J)=CU1(I,K,J)-CIKX(I)*CR1(I,K,J)
-            CU3(I,K,J)=CU3(I,K,J)-CIKZ(K)*CR1(I,K,J)
+            CU3(I,K,J)=CU3(I,K,J)-CIKZ(K)*CR1(I,K,J)           
           END DO
         END DO
       END DO
@@ -1221,14 +1230,14 @@ C We have CUi, need to compute CP.  Solve tridiagonal system exactly
       INCLUDE 'header'
 
       INTEGER I,J,K,N
-
+      
 	if (flavor.eq.'Basic') then
-      IF (RANK.EQ.0)
+      IF (RANK.EQ.0) 
      &          WRITE(*,*) 'COMPUTING CP FROM CUI'
 	end if
 
 
-C First, construct the RHS vector, (dui/dxj)(duj/dxi)
+C First, construct the RHS vector, (dui/dxj)(duj/dxi) 
       DO J=2,NY
         DO K=0,TNKZ
           DO I=0,NXP-1 ! NKX
@@ -1242,7 +1251,7 @@ C First, construct the RHS vector, (dui/dxj)(duj/dxi)
       CALL FFT_XZ_TO_PHYSICAL(CF1,F1,0,NY+1)
       CALL FFT_XZ_TO_PHYSICAL(CF2,F2,0,NY+1)
       CALL FFT_XZ_TO_PHYSICAL(CF3,F3,0,NY+1)
-
+      
       DO J=2,NY
         DO K=0,NZP-1
           DO I=0,NXM
@@ -1287,13 +1296,13 @@ C Compute product
           END DO
         END DO
       END DO
-
+      
       CALL FFT_XZ_TO_FOURIER(F1,CF1,0,NY+1)
 
 C Add to RHS term
       DO J=2,NY
         DO K=0,TNKZ
-          DO I=0,NXP-1 ! NKX
+          DO I=0,NXP-1 ! NKX 
             CS1(I,K,J)=CS1(I,K,J)+CF1(I,K,J)
           END DO
         END DO
@@ -1345,7 +1354,7 @@ C Now get the third of the off-diagonal terms
 
       CALL FFT_XZ_TO_PHYSICAL(CF1,F1,0,NY+1)
       CALL FFT_XZ_TO_PHYSICAL(CF2,F2,0,NY+1)
-
+      
 C Compute product
       DO J=2,NY
         DO K=0,NZP-1
@@ -1364,8 +1373,8 @@ C Add to RHS term
             CS1(I,K,J)=CS1(I,K,J)+CF1(I,K,J)
           END DO
         END DO
-      END DO
-
+      END DO     
+    
 C Finally, if the buoyancy force is active, then we need to add
 C the contribution of the density to the pressure.  Note that the
 C plane averaged density and the corresponding hydrostatic part of the
@@ -1373,7 +1382,7 @@ C pressure have been cancelled, so skip the 0,0 mode
       DO N=1,N_TH
       DO J=2,NY
         DO K=0,TNKZ
-          DO I=0,NXP-1
+          DO I=0,NXP-1  
             IF ((RANKZ.NE.0).OR.(I.NE.0).or.(K.NE.0)) THEN
               CS1(I,K,J)=CS1(I,K,J)+RI(N)*
      &          (CTH(I,K,J+1,N)-CTH(I,K,J-1,N))/(GYF(J+1)-GYF(J-1))
@@ -1383,7 +1392,7 @@ C pressure have been cancelled, so skip the 0,0 mode
       END DO
       END DO
 
-C Now, the RHS term should be stored in CS1
+C Now, the RHS term should be stored in CS1     
 
 C Construct the tridiagonal system in Fourier space to solve for CP
 C First, zero the vectors
@@ -1402,7 +1411,7 @@ C First, zero the vectors
             MATL_C(I,J)=1./(DY(J)*DYF(J))
             MATD_C(I,J)=-KX2(I)-KZ2(K)-1./(DY(J+1)*DYF(J))
      &                    -1./(DY(J)*DYF(J))
-            MATU_C(I,J)=1./(DY(J+1)*DYF(J))
+            MATU_C(I,J)=1./(DY(J+1)*DYF(J))   
             VEC_C(I,J)=-1.*CS1(I,K,J)
           END DO
         END DO
@@ -1460,7 +1469,7 @@ C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
       INTEGER I,J,K,N
 
 ! Read in input parameters specific for channel flow case
-      OPEN (11,file='input_chan.dat',form='formatted',status='old')
+      OPEN (11,file='input_chan.dat',form='formatted',status='old')      
 C Read input file.
 
       CURRENT_VERSION=2.0
@@ -1469,23 +1478,23 @@ C Read input file.
       READ(11,*)
       READ(11,*)
       READ(11,*) VERSION
-      IF (VERSION .NE. CURRENT_VERSION)
+      IF (VERSION .NE. CURRENT_VERSION) 
      &         STOP 'Wrong input data format input_chan'
       READ(11,*)
       READ(11,*) TIME_AD_METH
-      READ(11,*)
+      READ(11,*) 
       READ(11,*) LES_MODEL_TYPE
       READ(11,*)
       READ(11,*) IC_TYPE, KICK
       READ(11,*)
       READ(11,*) I_RO
-      READ(11,*)
+      READ(11,*) 
       READ(11,*) GRAV_X, GRAV_Y, GRAV_Z
       READ(11,*)
       READ(11,*) F_TYPE, UBULK0, PX0, OMEGA0, AMP_OMEGA0
       READ(11,*)
       READ(11,*) U_BC_YMIN, U_BC_YMIN_C1, U_BC_YMIN_C2, U_BC_YMIN_C3
-      READ(11,*)
+      READ(11,*) 
       READ(11,*) V_BC_YMIN, V_BC_YMIN_C1, V_BC_YMIN_C2, V_BC_YMIN_C3
       READ(11,*)
       READ(11,*) W_BC_YMIN, W_BC_YMIN_C1, W_BC_YMIN_C2, W_BC_YMIN_C3
@@ -1556,7 +1565,7 @@ C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
      &              ' (NzMovie: ', RankZMovie*NZP+NzMovie, ')'
 
             END IF
-
+ 
       RETURN
       END
 
@@ -1567,26 +1576,26 @@ C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
       CHARACTER*55 FNAME
       INTEGER I,J,K
 
-         IF (RANK.EQ.0)
+         IF (RANK.EQ.0) 
      &     WRITE (6,*) 'Fourier in X'
          DO I=0,NX
            GX(I)=(I*LX)/NX
            DX(I)=LX/NX
-           IF (VERBOSITY .GT. 3 .AND. RANK.EQ.0)
+           IF (VERBOSITY .GT. 3 .AND. RANK.EQ.0) 
      &          WRITE(6,*) 'GX(',I,') = ',GX(I)
          END DO
-         IF (RANK.EQ.0)
+         IF (RANK.EQ.0) 
      &        WRITE (6,*) 'Fourier in Z'
          DO K=0,NZ
            GZ(K)=(K*LZ)/NZ
            DZ(K)=LZ/NZ
-           IF (RANK.EQ.0 .AND. VERBOSITY .GT. 3)
+           IF (RANK.EQ.0 .AND. VERBOSITY .GT. 3) 
      &          WRITE(6,*) 'GZ(',K,') = ',GZ(K)
          END DO
-         IF (RANK.EQ.0)
+         IF (RANK.EQ.0) 
      &        WRITE (6,*) 'Finite-difference in Y'
 
-         IF (RANK.EQ.0)
+         IF (RANK.EQ.0) 
      &        write(*,*) 'USE_MPI: ',USE_MPI
 
          FNAME='grid.h5'
@@ -1601,9 +1610,9 @@ C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
             write(*,*) ' **** ERROR ******************************'
             write(*,*) ' Program not compiled with HDF5 libraries.'
             END IF
-            stop
+            stop 
 #endif
-         else
+         else 
          IF (USE_MPI) THEN
            FNAME='./ygrid'//trim(MPI_IO_NUM)//'.txt'
            IF (RANK.EQ.0) THEN
@@ -1616,13 +1625,13 @@ C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
          READ (30,*) NY_T
 C Check to make sure that grid file is the correct dimensions
          IF (NY_T.ne.NY) THEN
-           IF (RANK.EQ.0)
+           IF (RANK.EQ.0) 
      &           WRITE(6,*) 'NY, NY_T',NY,NY_T
            STOP 'Error: ygrid.txt wrong dimensions'
          END IF
          DO J=1,NY+1
            READ(30,*) GY(j)
-           IF (VERBOSITY .GT. 3 .AND. RANK.EQ.0)
+           IF (VERBOSITY .GT. 3 .AND. RANK.EQ.0) 
      &          WRITE(6,*) 'GY(',J,') = ',GY(J)
          END DO
          DO J=1,NY
@@ -1651,11 +1660,11 @@ C Define grid spacing
          END DO
          DYF(NY+1)=DYF(NY)
 
-         RETURN
+         RETURN 
          END
 
 
-
+ 
 C----*|--.---------.---------.---------.---------.---------.---------.-|------
       SUBROUTINE APPLY_BC_1_LOWER(MATL,MATD,MATU,VEC)
 C----*|--.---------.---------.---------.---------.---------.---------.-|-----
@@ -1666,15 +1675,15 @@ C Bottom Wall:
       IF (U_BC_YMIN.EQ.0) THEN
 C Dirichlet
         DO I=0,NXM
-          MATL(I,0)=0.
+          MATL(I,0)=0. 
           MATD(I,0)=1.
-          MATU(I,0)=0.
+          MATU(I,0)=0.                   
           VEC(I,0)=0.
 
-          MATL(I,1)=0.
+          MATL(I,1)=0. 
           MATD(I,1)=1.
-          MATU(I,1)=0.
-          VEC(I,1)=U_BC_YMIN_C1
+          MATU(I,1)=0.                   
+          VEC(I,1)=U_BC_YMIN_C1 
         END DO
       ELSE
 C Neumann
@@ -1693,7 +1702,7 @@ C Neumann
 
       END IF
 
-      RETURN
+      RETURN 
       END
 
 C----*|--.---------.---------.---------.---------.---------.---------.-|------
@@ -1706,15 +1715,15 @@ C Bottom Wall:
       IF (U_BC_YMIN.EQ.0) THEN
 C Dirichlet
         DO I=0,NKX
-          MATL_C(I,0)=0.
+          MATL_C(I,0)=0. 
           MATD_C(I,0)=1.
-          MATU_C(I,0)=0.
+          MATU_C(I,0)=0.                   
           VEC_C(I,0)=0.
 
-          MATL_C(I,1)=0.
+          MATL_C(I,1)=0. 
           MATD_C(I,1)=1.
-          MATU_C(I,1)=0.
-          VEC_C(I,1)=U_BC_YMIN_C1
+          MATU_C(I,1)=0.                   
+          VEC_C(I,1)=U_BC_YMIN_C1 
         END DO
       ELSE
 C Neumann
@@ -1733,7 +1742,7 @@ C Neumann
 
       END IF
 
-      RETURN
+      RETURN 
       END
 
 
@@ -1828,15 +1837,15 @@ C Bottom Wall:
       IF (V_BC_YMIN.EQ.0) THEN
 C Dirichlet
         DO I=0,NXM
-          MATL(I,1)=0.d0
+          MATL(I,1)=0.d0 
           MATD(I,1)=1.d0
-          MATU(I,1)=0.d0
-          VEC(I,1)=V_BC_YMIN_C1
+          MATU(I,1)=0.d0                   
+          VEC(I,1)=V_BC_YMIN_C1 
 
-          MATL(I,2)=0.d0
+          MATL(I,2)=0.d0 
           MATD(I,2)=1.d0
-          MATU(I,2)=0.d0
-          VEC(I,2)=V_BC_YMIN_C1
+          MATU(I,2)=0.d0                   
+          VEC(I,2)=V_BC_YMIN_C1 
         END DO
       ELSE IF (V_BC_YMIN.EQ.1) THEN
 C Neumann
@@ -1869,15 +1878,15 @@ C Bottom Wall:
       IF (V_BC_YMIN.EQ.0) THEN
 C Dirichlet
         DO I=0,NKX
-          MATL_C(I,1)=0.d0
+          MATL_C(I,1)=0.d0 
           MATD_C(I,1)=1.d0
-          MATU_C(I,1)=0.d0
-          VEC_C(I,1)=V_BC_YMIN_C1
+          MATU_C(I,1)=0.d0                   
+          VEC_C(I,1)=V_BC_YMIN_C1 
 
-          MATL_C(I,2)=0.d0
+          MATL_C(I,2)=0.d0 
           MATD_C(I,2)=1.d0
-          MATU_C(I,2)=0.d0
-          VEC_C(I,2)=V_BC_YMIN_C1
+          MATU_C(I,2)=0.d0                   
+          VEC_C(I,2)=V_BC_YMIN_C1 
         END DO
       ELSE IF (V_BC_YMIN.EQ.1) THEN
 C Neumann
@@ -1900,7 +1909,7 @@ C The following is only a placeholder, this row is used for U1 and U3
       RETURN
       END
 
-
+ 
 C----*|--.---------.---------.---------.---------.---------.---------.-|--
       SUBROUTINE APPLY_BC_2_UPPER(MATL,MATD,MATU,VEC)
 C----*|--.---------.---------.---------.---------.---------.---------.-|--
@@ -1914,7 +1923,7 @@ C Dirichlet
           MATD(I,NY+1)=1.
           MATU(I,NY+1)=0.
           VEC(I,NY+1)=V_BC_YMAX_C1
-
+          
           MATL(I,NY)=0.
           MATD(I,NY)=1.
           MATU(I,NY)=0.
@@ -1928,7 +1937,7 @@ C Neumann
           MATU(I,NY+1)=0.
           VEC(I,NY+1)=DYF(NY)*V_BC_YMAX_C1
         END DO
-      END IF
+      END IF      
       RETURN
       END
 
@@ -1945,7 +1954,7 @@ C Dirichlet
           MATD_C(I,NY+1)=1.
           MATU_C(I,NY+1)=0.
           VEC_C(I,NY+1)=V_BC_YMAX_C1
-
+          
           MATL_C(I,NY)=0.
           MATD_C(I,NY)=1.
           MATU_C(I,NY)=0.
@@ -1958,7 +1967,7 @@ C Neumann
           MATD_C(I,NY+1)=1.
           MATU_C(I,NY+1)=0.
           VEC_C(I,NY+1)=DYF(NY)*V_BC_YMAX_C1
-        END DO
+        END DO      
       END IF
       RETURN
       END
@@ -1973,14 +1982,14 @@ C Bottom Wall:
       IF (W_BC_YMIN.EQ.0) THEN
 C Dirichlet
         DO I=0,NXM
-          MATL(I,0)=0.
+          MATL(I,0)=0. 
           MATD(I,0)=1.
-          MATU(I,0)=0.
+          MATU(I,0)=0.                   
           VEC(I,0)=0.
 
-          MATL(I,1)=0.
+          MATL(I,1)=0. 
           MATD(I,1)=1.
-          MATU(I,1)=0.
+          MATU(I,1)=0.                   
           VEC(I,1)=W_BC_YMIN_C1
         END DO
       ELSE
@@ -2013,14 +2022,14 @@ C Bottom Wall:
       IF (W_BC_YMIN.EQ.0) THEN
 C Dirichlet
         DO I=0,NKX
-          MATL_C(I,0)=0.
+          MATL_C(I,0)=0. 
           MATD_C(I,0)=1.
-          MATU_C(I,0)=0.
+          MATU_C(I,0)=0.                   
           VEC_C(I,0)=0.
 
-          MATL_C(I,1)=0.
+          MATL_C(I,1)=0. 
           MATD_C(I,1)=1.
-          MATU_C(I,1)=0.
+          MATU_C(I,1)=0.                   
           VEC_C(I,1)=W_BC_YMIN_C1
         END DO
       ELSE
@@ -2080,7 +2089,7 @@ C Neumann
 
       END IF
 
-      RETURN
+      RETURN 
       END
 
 
@@ -2133,14 +2142,14 @@ C----*|--.---------.---------.---------.---------.---------.---------.-|--
       if (TH_BC_YMIN(N).eq.0) then
 ! Dirichlet
         do i=0,NXM
-          MATL(i,0)=0.
+          MATL(i,0)=0. 
           MATD(i,0)=1.
-          MATU(i,0)=0.
+          MATU(i,0)=0.                   
           VEC(i,0)=0.
 
-          MATL(i,1)=0.
+          MATL(i,1)=0. 
           MATD(i,1)=1.
-          MATU(i,1)=0.
+          MATU(i,1)=0.                   
           VEC(i,1)=TH_BC_YMIN_C1(N)
         end do
       else
@@ -2171,14 +2180,14 @@ C----*|--.---------.---------.---------.---------.---------.---------.-|--
       if (TH_BC_YMIN(N).eq.0) then
 ! Dirichlet
         do i=0,NKX
-          MATL_C(i,0)=0.
+          MATL_C(i,0)=0. 
           MATD_C(i,0)=1.
-          MATU_C(i,0)=0.
+          MATU_C(i,0)=0.                   
           VEC_C(i,0)=0.
 
-          MATL_C(i,1)=0.
+          MATL_C(i,1)=0. 
           MATD_C(i,1)=1.
-          MATU_C(i,1)=0.
+          MATU_C(i,1)=0.                   
           VEC_C(i,1)=TH_BC_YMIN_C1(N)
         end do
       else
@@ -2288,11 +2297,11 @@ C This subroutine is called after initializing the flow
 C It sets the appropriate boundary conditions including ghost cell values
 C  on the velocity field in Fourier space
       INCLUDE 'header'
-      INTEGER I,K
+      INTEGER I,K      
 
-C Now, apply the boundary conditions depending on the type specified
+C Now, apply the boundary conditions depending on the type specified 
       IF (U_BC_YMIN.EQ.0) THEN
-C Dirichlet
+C Dirichlet 
 C Start with zero
          DO K=0,TNKZ
            DO I=0,NXP-1
@@ -2350,7 +2359,7 @@ C Now, Apply BC to mean
            CU3(0,0,0)=CU3(0,0,1)-DY(1)*W_BC_YMIN_C1
          END IF
       ELSE
-         STOP 'Error: W_BC_YMIN must be 0, or 1'
+         STOP 'Error: W_BC_YMIN must be 0, or 1' 
       END IF
 
       IF (V_BC_YMIN.EQ.0) THEN
@@ -2358,8 +2367,8 @@ C Dirichlet
 C Set the vertical velocity at GYF(1) (halfway between GY(2) and GY(1))
          DO K=0,TNKZ
            DO I=0,NXP-1
-             CU2(I,K,1)=2.d0*V_BC_YMIN_C1-CU2(I,K,2)
-             CU2(I,K,0)=CU2(I,K,1)
+             CU2(I,K,1)=2.d0*V_BC_YMIN_C1-CU2(I,K,2)  
+             CU2(I,K,0)=CU2(I,K,1)  
            END DO
          END DO
       ELSE IF (V_BC_YMIN.EQ.1) THEN
@@ -2371,8 +2380,8 @@ C Neumann
            END DO
          END DO
          IF (RANKZ.EQ.0) THEN
-           CU2(0,0,1)=CU2(0,0,2)-DYF(1)*V_BC_YMIN_C1
-           CU2(0,0,0)=CU2(0,0,1)-DYF(1)*V_BC_YMIN_C1
+           CU2(0,0,1)=CU2(0,0,2)-DYF(1)*V_BC_YMIN_C1 
+           CU2(0,0,0)=CU2(0,0,1)-DYF(1)*V_BC_YMIN_C1 
          END IF
 
       ELSE IF (V_BC_YMIN.EQ.2) THEN
@@ -2393,11 +2402,11 @@ C This subroutine is called after initializing the flow
 C It sets the appropriate boundary conditions including ghost cell values
 C  on the velocity field in Fourier space
       INCLUDE 'header'
-      INTEGER I,K
+      INTEGER I,K      
 
 ! Now, apply boundary conditions to the top of the domain
       IF (U_BC_YMAX.EQ.0) THEN
-C Dirichlet
+C Dirichlet 
 C Start with zero
          DO K=0,TNKZ
            DO I=0,NXP-1
@@ -2491,163 +2500,6 @@ C (initialize as zero gradient)
       RETURN
       END
 
-C----*|--.---------.---------.---------.---------.---------.---------.-|--
-      SUBROUTINE APPLY_BC_VEL_PHYS_LOWER
-C----*|--.---------.---------.---------.---------.---------.---------.-|--
-C This subroutine is called after initializing the flow
-C It sets the appropriate boundary conditions including ghost cell values
-C  on the velocity field in Physical space
-      INCLUDE 'header'
-      INTEGER I,K
-
-C Now, apply the boundary conditions depending on the type specified
-      IF (U_BC_YMIN.EQ.0) THEN
-C Dirichlet
-C Start with zero
-        DO K=0,NZP-1
-          DO I=0,NXM
-             U1(I,K,0)=U_BC_YMIN_C1
-             U1(I,K,1)=U_BC_YMIN_C1
-           END DO
-         END DO
-      ELSE IF (U_BC_YMIN.EQ.1) THEN
-C Neumann
-        DO K=0,NZP-1
-          DO I=0,NXM
-             U1(I,K,1)=U1(I,K,2)-DY(2)*U_BC_YMIN_C1
-             U1(I,K,0)=U1(I,K,1)-DY(1)*U_BC_YMIN_C1
-           END DO
-         END DO
-      ELSE
-         STOP 'Error: U_BC_YMIN must be 0, or 1'
-      END IF
-
-      IF (W_BC_YMIN.EQ.0) THEN
-C Dirichlet
-C Start with zero
-        DO K=0,NZP-1
-          DO I=0,NXM
-             U3(I,K,0)=W_BC_YMIN_C1
-             U3(I,K,1)=W_BC_YMIN_C1
-           END DO
-         END DO
-      ELSE IF (W_BC_YMIN.EQ.1) THEN
-C Neumann
-        DO K=0,NZP-1
-          DO I=0,NXM
-             U3(I,K,1)=U3(I,K,2)-DY(2)*W_BC_YMIN_C1
-             U3(I,K,0)=U3(I,K,1)-DY(1)*W_BC_YMIN_C1
-           END DO
-         END DO
-      ELSE
-         STOP 'Error: W_BC_YMIN must be 0, or 1'
-      END IF
-
-      IF (V_BC_YMIN.EQ.0) THEN
-C Dirichlet
-C Set the vertical velocity at GYF(1) (halfway between GY(2) and GY(1))
-        DO K=0,NZP-1
-          DO I=0,NXM
-             U2(I,K,1)=2.d0*V_BC_YMIN_C1-U2(I,K,2)
-             U2(I,K,0)=U2(I,K,1)
-           END DO
-         END DO
-      ELSE IF (V_BC_YMIN.EQ.1) THEN
-C Neumann
-        DO K=0,NZP-1
-          DO I=0,NXM
-             U2(I,K,1)=U2(I,K,2)-DYF(1)*V_BC_YMIN_C1
-             U2(I,K,0)=U2(I,K,1)-DYF(1)*V_BC_YMIN_C1
-           END DO
-         END DO
-C      ELSE IF (V_BC_YMIN.EQ.2) THEN
-C Upstream-travelling wave proposed by Speyer/Kim
-C (initialize as zero)
-C         IF (RANKZ.EQ.0) CU2(0,0,1)=-CU2(0,0,2)
-      ELSE
-         STOP 'Error: V_BC_YMIN must be 0, 1'
-      END IF
-
-      RETURN
-      END
-
-C----*|--.---------.---------.---------.---------.---------.---------.-|--
-      SUBROUTINE APPLY_BC_VEL_PHYS_UPPER
-C----*|--.---------.---------.---------.---------.---------.---------.-|--
-C This subroutine is called after initializing the flow
-C It sets the appropriate boundary conditions including ghost cell values
-C  on the velocity field in Fourier space
-      INCLUDE 'header'
-      INTEGER I,K
-
-! Now, apply boundary conditions to the top of the domain
-      IF (U_BC_YMAX.EQ.0) THEN
-C Dirichlet
-C Start with zero
-        DO K=0,NZP-1
-          DO I=0,NXM
-             U1(I,K,NY)=U_BC_YMAX_C1
-             U1(I,K,NY+1)=U_BC_YMAX_C1
-           END DO
-         END DO
-      ELSE IF (U_BC_YMAX.EQ.1) THEN
-C Neumann
-        DO K=0,NZP-1
-          DO I=0,NXM
-             U1(I,K,NY)=U1(I,K,NY-1)+DY(NY)*U_BC_YMAX_C1
-             U1(I,K,NY+1)=U1(I,K,NY)+DY(NY)*U_BC_YMAX_C1
-           END DO
-         END DO
-      ELSE
-         STOP 'Error: U_BC_YMAX must be 0, or 1'
-      END IF
-
-      IF (W_BC_YMAX.EQ.0) THEN
-C Dirichlet
-C Start with zero
-        DO K=0,NZP-1
-          DO I=0,NXM
-             U3(I,K,NY)=W_BC_YMAX_C1
-             U3(I,K,NY+1)=W_BC_YMAX_C1
-           END DO
-         END DO
-      ELSE IF (W_BC_YMAX.EQ.1) THEN
-C Neumann
-        DO K=0,NZP-1
-          DO I=0,NXM
-             U3(I,K,NY)=U3(I,K,NY-1)+DY(NY)*W_BC_YMAX_C1
-             U3(I,K,NY+1)=U3(I,K,NY)+DY(NY)*W_BC_YMAX_C1
-           END DO
-         END DO
-      ELSE
-        STOP 'Error: W_BC_YMAX must be 0, or 1'
-      END IF
-
-      IF (V_BC_YMAX.EQ.0) THEN
-C Dirichlet
-C Set the vertical velocity at GYF(NY) (halfway between GY(NY) and GY(NY+1))
-        DO K=0,NZP-1
-          DO I=0,NXM
-             U2(I,K,NY+1)=2.d0*V_BC_YMAX_C1-U2(I,K,NY)
-           END DO
-         END DO
-      ELSE IF (V_BC_YMAX.EQ.1) THEN
-C Neumann
-        DO K=0,NZP-1
-          DO I=0,NXM
-             U2(I,K,NY+1)=U2(I,K,NY)+DY(NY)*V_BC_YMAX_C1
-           END DO
-         END DO
-C      ELSE IF (V_BC_YMAX.EQ.2) THEN
-C Upstream-travelling wave proposed by Speyer/Kim
-C (initialize as zero gradient)
-C         IF (RANKZ.EQ.0) CU2(0,0,NY+1)=-CU2(0,0,NY)
-      ELSE
-         STOP 'Error: V_BC_YMAX must be 0, 1'
-      END IF
-
-      RETURN
-      END
 
 C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
       SUBROUTINE THOMAS_REAL(A,B,C,G,NY,NX)
@@ -2683,7 +2535,7 @@ C [  0  a3  b3   c3  0 ...
       RETURN
       END
 
-C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+C----*|--.---------.---------.---------.---------.---------.---------.-|-------|    
       SUBROUTINE THOMAS_COMPLEX(A,B,C,G,NY,NX)
 C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 
@@ -2719,93 +2571,309 @@ C [  0  a3  b3   c3  0 ...
       RETURN
       END
 
-C----*|--.---------.---------.---------.---------.---------.---------.-|--
-      SUBROUTINE APPLY_BC_SCALAR_LOWER
-C----*|--.---------.---------.---------.---------.---------.---------.-|--
-C This subroutine is called after initializing the flow
-C It sets the appropriate boundary conditions including ghost cell values
-C  on the scalar fields in Fourier space
-      INCLUDE 'header'
-      INTEGER I,K,N
-      DO N=1,N_TH
-C Now, apply the boundary conditions depending on the type specified
-      IF (TH_BC_YMIN(N).EQ.0) THEN
-C Dirichlet
-C Start with zero
-         DO K=0,TNKZ
-           DO I=0,NXP-1
-             CTH(I,K,0,N)=0.d0
-             CTH(I,K,1,N)=0.d0
-           END DO
-         END DO
-C Now, set only the mean
-         IF (RANKZ.EQ.0) THEN
-           CTH(0,0,1,N)=TH_BC_YMIN_C1(N)
-           CTH(0,0,0,N)=TH_BC_YMIN_C1(N)
-         END IF
-      ELSE IF (TH_BC_YMIN(N).EQ.1) THEN
-C Neumann
-         DO K=0,TNKZ
-           DO I=0,NXP-1
-             CTH(I,K,1,N)=CTH(I,K,2,N)
-             CTH(I,K,0,N)=CTH(I,K,1,N)
-           END DO
-         END DO
-C Now, Apply BC to mean
-         IF (RANKZ.EQ.0) THEN
-           CTH(0,0,1,N)=CTH(0,0,2,N)-DY(2)*TH_BC_YMIN_C1(N)
-           CTH(0,0,0,N)=CTH(0,0,1,N)-DY(1)*TH_BC_YMIN_C1(N)
-         END IF
-      ELSE
-         STOP 'Error: TH_BC_YMIN must be 0, or 1'
+
+
+C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+      SUBROUTINE BUOYANCY_PDF_CHAN()
+C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+C Here the buoyancy pdf is computed using a rescaled histogram for a
+C single snapshot of the complete 3D flow field and then written to file
+
+      include 'header'
+
+      integer i,j,k,n
+      real*8 bins(nbins+1),dbins(nbins)
+      integer testhist(nbins)
+      real*8 testhist_rescaled(nbins),counts(nbins)
+      character*55 fname
+      character*20 gname
+      real*8 Diagbins(1:nbins)
+
+ ! bin variables
+      deltabin=(binmax-binmin)/real(nbins)
+      
+! generate bin edge values
+      do i=1,nbins+1
+         bins(i)=binmin+real(i-1)*deltabin
+      end do
+      
+! generate bin edge values
+      do i=1,nbins+1
+         bins(i)=binmin+real(i-1)*deltabin
+      end do
+      
+! calculate bin widths
+      do i=1,nbins
+         dbins(i)=bins(i+1)-bins(i)
+      end do
+      
+! zero initial histogram matrices
+      do i=1,nbins
+         testhist(i)=0
+         testhist_rescaled(i)=0.d0
+         counts(i)=0.d0
+      end do
+
+! calculate buoyancy histogram over (x,z) directions at each height y
+! and rescale by delta(y), the height of the layer
+
+! first do edge values
+      do i=0,nxm
+         do k=0,nzp-1
+            binlabel=floor((th(i,k,1,1)-binmin)/deltabin)+1
+            testhist(binlabel)=testhist(binlabel)+1
+         end do
+      end do
+
+      do i=1,nbins
+         testhist_rescaled(i)=real(testhist(i))/dbins(i)
+         counts(i)=counts(i)+testhist_rescaled(i)*dyf(1)/2.d0
+         testhist(i)=0
+      end do
+
+      do i=0,nxm
+         do k=0,nzp-1
+            binlabel=floor((th(i,k,ny,1)-binmin)/deltabin)+1
+            testhist(binlabel)=testhist(binlabel)+1
+         end do
+      end do
+
+      do i=1,nbins
+         testhist_rescaled(i)=real(testhist(i))/dbins(i)
+         counts(i)=counts(i)+testhist_rescaled(i)*dyf(ny)/2.d0
+         testhist(i)=0
+      end do
+
+! do interior points      
+      do j=2,ny-1
+         ! bin data
+         do i=0,nxm
+            do k=0,nzp-1
+               binlabel=floor((th(i,k,j,1)-binmin)/deltabin)+1
+               testhist(binlabel)=testhist(binlabel)+1
+            end do
+         end do
+         ! rescale binned data to account for varying bin widths
+         ! and store in counts for the layer contribution
+         ! also rezero testhist for next layer  
+         do i=1,nbins
+            testhist_rescaled(i)=real(testhist(i))/dbins(i)
+            counts(i)=counts(i)+testhist_rescaled(i)*dy(j)
+            testhist(i)=0
+         end do
+      end do
+
+!     sum resulting counts from all mpi processors
+      if (use_mpi) then
+      call mpi_allreduce(mpi_in_place,counts,nbins,
+     &        MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierror)
+      end if
+!      write(*,*) 'gathered all data from all processors'
+
+#ifdef HDF5
+! write out resulting rescaled histogram to hdf5 file
+      fname='buoypdf.h5'
+
+      gname='time'
+      call WriteHDF5_real(fname,gname,TIME)
+!      write(*,*) 'time written to buoypdf.h5'
+      
+      ! only need to write from one process  
+      IF ((RANKZ.eq.0).and.(RANKY.eq.0)) then
+!         write(*,*) 'starting write to buoypdf.h5'
+!         do j=1,nbins
+!            write(*,*) 'bins,dbins,counts=',bins(j),dbins(j),
+!     &           counts(j)
+!         end do
+         gname='bins'
+         Diagbins=bins(1:nbins)
+         call WriteBinsH5(fname,bins,dbins,counts)
+!         write(*,*) 'bin locations written to buoypdf.h5'
+
+!         write(*,*) 'binned data written to file'
       END IF
+
+      if (use_mpi) then
+         call mpi_barrier(MPI_COMM_WORLD,ierror)
+      end if
+         
+#else      
+! write out resulting rescaled histogram to text file
+      ! only need to write from one process
+      if ((RANKZ.eq.0).and.(RANKY.eq.0)) then
+      if (use_mpi)
+         fname='buoypdf'//trim(mpi_io_num)//'.txt'
+      else
+         fname='buoypdf.txt'
+      end if
+      
+      open(15,file=fname,form='formatted',status='unknown')
+      write(15,*) time_step,time,delta_t
+      do i=1,nbins
+         write(15,151) i,bins(i),dbins(i),counts(i)
+      end do
+
+ 151  format(I4,' ',3(F20.9,' '))
+
+      end if
+#endif
+
+      do i=1,nbins
+         counts(i)=0.d0
+         testhist_rescaled(i)=0.d0
+         testhist(i)=0
+      end do
+
+      END SUBROUTINE
+
+C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+
+
+C----*|--.---------.---------.---------.---------.---------.---------.-|--
+      SUBROUTINE SPONGE_TH(N)
+C----*|--.---------.---------.---------.---------.---------.---------.-|--
+! This subroutine applies a sponge relaxation (Rayleigh damping) towards a 
+! specified background state for the temperature field
+! The intention is to allow an open boundary
+C----*|--.---------.---------.---------.---------.---------.---------.-|--
+
+      include 'header'
+
+      INTEGER I,J,K,N
+! The following variables will store the background state
+      REAL*8 TH_0(-1:NY+1)
+      REAL*8 TH_TOP
+     
+! Get mean at top of computational domain
+!      TH_TOP=CTH(0,0,NYC,N)
+! Do not let the value to float
+!      TH_TOP=GYF(NYC)
+
+! Set the background state
+      DO J=0,NY+1
+! Neumann
+!         TH_0(J)=TH_TOP+(GYF(J)-GYF(NYC))
+!         write(199,*) 'j,TH_0(j) :',J,TH_0(J)
+! tanh
+         TH_0(J)=tanh(GYF(J)-LY/2.d0)
+         write(199,*) 'j,TH_0(j) :',J,TH_0(J)
       END DO
+
+! Damp the theta field
+!      DO K=0,NZM
+!         DO I=0,NXM
+!            DO J=JSTART_TH(N),JEND_TH(N)
+!               TH(I,K,J,N)=TH(I,K,J,N)
+!     &              -SPONGE_SIGMA(J)*(TH(I,K,J,N)-TH_0(J))
+!            END DO
+!         END DO
+!      END DO
+
+! Add damping to R-K terms
+      DO K=1,TNKZ
+         DO I=1,NXP-1
+            DO J=0,NY+1
+               CFTH(I,K,J,N)=CFTH(I,K,J,N)
+     &              +SPONGE_SIGMA(J)*(CTH(I,K,J,N)-0.)
+            END DO
+         END DO
+      END DO
+
+! Damp the mean terms towards the background state
+      DO J=0,NY+1
+         CFTH(0,0,J,N)=CFTH(0,0,J,N)
+     &        +SPONGE_SIGMA(J)*(CTH(0,0,J,N)-TH_0(J))
+         CFTH(1,0,J,N)=CFTH(1,0,J,N)
+     &        +SPONGE_SIGMA(J)*(CTH(1,0,J,N)-0.D0)
+         CFTH(0,1,J,N)=CFTH(0,1,J,N)
+     &        +SPONGE_SIGMA(J)*(CTH(0,1,J,N)-0.D0)
+      END DO
+
       RETURN
       END
+
 C----*|--.---------.---------.---------.---------.---------.---------.-|--
-      SUBROUTINE APPLY_BC_SCALAR_UPPER
+      SUBROUTINE SPONGE_VEL
 C----*|--.---------.---------.---------.---------.---------.---------.-|--
-C This subroutine is called after initializing the flow
-C It sets the appropriate boundary conditions including ghost cell values
-C  on the scalar fields in Fourier space
-      INCLUDE 'header'
-      INTEGER I,K,N
-      DO N=1,N_TH
-! Now, apply boundary conditions to the top of the domain
-      IF (TH_BC_YMAX(N).EQ.0) THEN
-C Dirichlet
-C Start with zero
-         DO K=0,TNKZ
-           DO I=0,NXP-1
-             CTH(I,K,NY,N)=0.d0
-             CTH(I,K,NY+1,N)=0.d0
+! This subroutine applieds a sponge relaxation (Rayleigh damping) towards a 
+! specified background state. 
+! The intention is to allow an open boundary. 
+C----*|--.---------.---------.---------.---------.---------.---------.-|--
+
+      include 'header'
+
+      INTEGER I,J,K
+! The following variables will store the background state
+      REAL*8 U1_0(-1:NY+1),U2_0(0:NY+1),U3_0(-1:NY+1)
+
+      ! Create the function to be used for Rayleigh damping
+        IF (SPONGE.EQ.1) THEN
+           DO J=1,NY+1
+! Exponential damping at top and bottom walls
+              SPONGE_SIGMA(J)=SPONGE_AMP*EXP(-1.*((LY-GYF(J))
+     &             /(SPONGE_L*0.5))**2.0)
+     &             +SPONGE_AMP*EXP(-1.*((0.d0-GYF(J))
+     &             /(SPONGE_L*0.5))**2.0)
+
+!      open(72,file='spongeplot.txt',form='formatted',status='unknown')
+!      write(72,172) J,SPONGE_SIGMA(J)
+! 172  format(I3,(F8.3))
+
            END DO
-         END DO
-C Now, set only the mean
-         IF (RANKZ.EQ.0) THEN
-           CTH(0,0,NY,N)=TH_BC_YMAX_C1(N)
-           CTH(0,0,NY+1,N)=TH_BC_YMAX_C1(N)
-         END IF
-      ELSE IF (TH_BC_YMAX(N).EQ.1) THEN
-C Neumann
-         DO K=0,TNKZ
-           DO I=0,NXP-1
-             CTH(I,K,NY,N)=CTH(I,K,NY-1,N)
-             CTH(I,K,NY+1,N)=CTH(I,K,NY,N)
-           END DO
-         END DO
-C Now, Apply BC to mean
-         IF (RANKZ.EQ.0) THEN
-           CTH(0,0,NY,N)=CTH(0,0,NY-1,N)+DY(NY)*TH_BC_YMAX_C1(N)
-           CTH(0,0,NY+1,N)=CTH(0,0,NY,N)+DY(NY)*TH_BC_YMAX_C1(N)
-         END IF
-      ELSE
-         STOP 'Error: TH_BC_YMAX must be 0, or 1'
-      END IF
+        END IF
+
+! Set the background state
+! Here, set the background to be geostrophic, with a linear temperature profile
+      DO J=0,NY+1
+!     U1_0(J)=TANH(GYF(J)-LY/2.d0)
+         U1_0(J)=CU1(0,0,J)
+         U3_0(J)=0.
       END DO
+      DO J=0,NY+1
+         U2_0(J)=0.
+      END DO
+
+! Damp the velocity field
+!      DO K=0,NZM
+!         DO I=0,NXM
+!            DO J=JSTART,JEND
+!               U1(I,K,J)=U1(I,K,J)-SPONGE_SIGMA(J)*(U1(I,K,J)-U1_0(J))
+!               U3(I,K,J)=U3(I,K,J)-SPONGE_SIGMA(J)*(U3(I,K,J)-U3_0(J))
+!            END DO
+!            DO J=1,NY
+!               U2(I,K,J)=U2(I,K,J)-0.5*(SPONGE_SIGMA(J)
+!     &              +SPONGE_SIGMA(J+1))*(U2(I,K,J)-U2_0(J))
+!            END DO
+!         END DO
+!      END DO
+
+! Add damping function to explicit R-K
+      DO K=0,TNKZ
+         DO I=0,NXP-1
+            IF((I.NE.0).OR.(K.NE.0)) THEN
+               DO J=JSTART,JEND
+                  CF1(I,K,J)=CF1(I,K,J)
+     &                 +SPONGE_SIGMA(J)*(CU1(I,K,J)-0.D0)
+                  CF3(I,K,J)=CF3(I,K,J)
+     &                 +SPONGE_SIGMA(J)*(CU3(I,K,J)-0.D0)
+               END DO
+               DO J=1,NY
+                  CF2(I,K,J)=CF2(I,K,J)
+     &                 +0.5*(SPONGE_SIGMA(J)+SPONGE_SIGMA(J+1))
+     &                 *(CU2(I,K,J)-0.D0)
+               END DO
+            END IF
+         END DO
+      END DO
+
+ ! Damp mean flow
+      DO J=JSTART,JEND
+         CF1(0,0,J)=CF1(0,0,J)+SPONGE_SIGMA(J)*(CU1(0,0,J)-U1_0(J))
+         CF3(0,0,J)=CF3(0,0,J)+SPONGE_SIGMA(J)*(CU3(0,0,J)-U3_0(J))
+      END DO
+      DO J=1,NY
+         CF2(0,0,J)=CF2(0,0,J)+SPONGE_SIGMA(J)*(CU2(0,0,J)-U2_0(J))
+      END DO
+
       RETURN
       END
-
-
-
-

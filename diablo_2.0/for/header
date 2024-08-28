@@ -123,8 +123,9 @@
      &       NxMovie, NyMovie, NzMovie, RankYMovie, RankZMovie
 
       INTEGER TIME_ARRAY(8)
-      REAL*8 START_TIME,END_TIME,TIME_LIMIT
-      COMMON /TIMINGS/ START_TIME,END_TIME,TIME_LIMIT
+      REAL*8 START_TIME,END_TIME,TIME_LIMIT,TEN_TIMESTEPS_TIME
+      COMMON /TIMINGS/ START_TIME,END_TIME,TIME_LIMIT,
+     &	     	       TEN_TIMESTEPS_TIME
 
 !----*|--.---------.---------.---------.---------.---------.---------.-|-------|! Parameters for scalar advection
 !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
@@ -168,6 +169,19 @@
       INTEGER J1,J2
       COMMON /LES_VARS/
      &   NU_T,KAPPA_T,LES_MODEL_TYPE,J1,J2,LES
+
+!----*|--.---------.---------.---------.---------.---------.---------.-|-------|! Parameters for application of sponge (Rayleigh damping) region
+!----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+      INTEGER SPONGE, NYC
+      REAL*8 SPONGE_AMP, SPONGE_L, LYC, kmag,kmag_max 
+      REAL*8 SPONGE_SIGMA(0:NY+1)
+      REAL*8 SPONGE_SIGMA2(0:NY+1)
+      REAL*8 NONLIN_DAMP(0:NY+1)
+      REAL*8 U1_bar(0:NY+1),U2_bar(0:NY+1),U3_bar(0:NY+1)
+      REAL*8 TH_bar(0:NY+1,1:N_TH)
+      COMMON /SPONGE_VARS/
+     &    SPONGE_SIGMA,SPONGE_SIGMA2, NONLIN_DAMP, SPONGE_AMP, SPONGE_L
+     &      , LYC, SPONGE, NYC
 
 !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 ! RKW3 parameters
@@ -284,7 +298,15 @@
       INTEGER NSAMPLES
 
       COMMON /STAT_VARS/ THBAR, THRMS, UBAR, VBAR, WBAR, URMS, URMS_B,
-     &   UME,VME,WME,VRMS_B,WRMS_B,TKE_B,WRMS, VRMS,UV,WV,UW, NSAMPLES
+     &          VRMS_B,WRMS_B,TKE_B,WRMS, VRMS,UV,WV,UW, NSAMPLES
+
+! number of bins for pdf calculation
+
+      LOGICAL BINNING
+      INTEGER NBINS,BINLABEL
+      REAL*8 DELTABIN,BINMAX,BINMIN
+
+      COMMON /PDF_VARS/ NBINS,BINLABEL,DELTABIN,BINMAX,BINMIN,BINNING
 
 !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 ! Variable viscosity parameters

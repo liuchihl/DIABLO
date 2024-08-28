@@ -447,7 +447,7 @@ C Read input file.
       READ(11,*)
       READ(11,*) LES_MODEL_TYPE
       READ(11,*)
-      READ(11,*) IC_TYPE, KICK
+      READ(11,*) IC_TYPE, KICK, SHIFT
       READ(11,*)
       DO N=1,N_TH
         READ(11,*)
@@ -629,6 +629,46 @@ C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
         uw(j)=uw(j)/(float(NZ)*float(NX))
         wv(j)=wv(j)/(float(NZ)*float(NX))
       end do
+
+! Compute K2D ( <u>z - <u>xz ) and K3D (u - <u>z )
+
+! 1)Compute <u>z first (spanwise direction)
+      do j=0,NYM
+      do i=0,NXM
+         ume_z(i,j)=0.
+         vme_z(i,j)=0.
+         wme_z(i,j)=0.
+      do k=0,NZM
+         ume_z(i,j)=ume_z(i,j)+U1(i,k,j)
+         vme_z(i,j)=vme_z(i,j)+U2(i,k,j)
+         wme_z(i,j)=wme_z(i,j)+U3(i,k,j)
+      end do
+         ume_z(i,j)=ume_z(i,j)/float(NZ)
+         vme_z(i,j)=vme_z(i,j)/float(NZ)
+         wme_z(i,j)=wme_z(i,j)/float(NZ)  
+      end do
+      end do
+
+! 2)Compute k2d and k3d
+      do j=0,NYM
+        ke2(j)=0.
+      do i=0,NXM
+        ke2(j)=ke2(j)+(ume_z(i,j)-mean_u1(j))**2.+
+     &  (vme_z(i,j)-mean_u2(j))**2.+(wme_z(i,j)-mean_u3(j))**2.
+      end do
+        ke2(j)=ke2(j)/(float(NX))
+      end do
+
+      do j=0,NYM
+        ke3(j)=0.
+      do k=0,NZM
+      do i=0,NXM
+        ke3(j)=ke3(j)+(U1(i,k,j)-ume_z(i,j))**2.+
+     & (U2(i,k,j)-vme_z(i,j))**2.+(U3(i,k,j)-wme_z(i,j))**2.
+      end do
+      end do
+        ke3(j)=ke3(j)/(float(NZ)*float(NX))
+      end do
               
 ! Get the y-derivative of the mean velocity at GYF points
       do j=1,NY-2
@@ -663,7 +703,7 @@ C----*|--.---------.---------.---------.---------.---------.---------.-|-------|
       do j=0,NYM
         write(40,401) j,GY(J),mean_u1(j)
      +      ,mean_u2(j)
-     +      ,mean_u3(j),urms(j),vrms(j),wrms(j)
+     +      ,mean_u3(j),urms(j),vrms(j),wrms(j),ke2(j),ke3(j)
      +      ,uv(j),uw(j),wv(j),dudy(j),dwdy(j),mean_p(j),shear(j)
       end do
 
